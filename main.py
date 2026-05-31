@@ -38,7 +38,7 @@ def main():
     print("Generating TextRank summaries...")
     sample_df['textrank_summary'] = batch_summarize(sample_df, 'article', textrank_summarizer)
     
-    if hybrid_summarizer:
+    if hybrid_summarizer:   
         print("Generating Hybrid Deep Learning summaries...")
         sample_df['hybrid_summary'] = batch_summarize_hybrid(
             sample_df, 'article', hybrid_summarizer

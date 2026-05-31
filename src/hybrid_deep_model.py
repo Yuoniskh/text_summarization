@@ -25,6 +25,7 @@ from sentence_transformers import SentenceTransformer
 from rouge_score import rouge_scorer
 import os
 import json
+import gc
 
 import tensorflow as tf
 from tensorflow import keras
@@ -131,9 +132,14 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences)) / len(sentences)
     
     def _compute_textrank_scores(self, sentences: List[str]) -> np.ndarray:
-        """Compute TextRank scores using sentence embeddings."""
+        """Compute TextRank scores using sentence embeddings with batching."""
         try:
-            embeddings = self.encoder.encode(sentences)
+            # Use show_progress_bar to display progress during encoding
+            embeddings = self.encoder.encode(
+                sentences, 
+                batch_size=32,  # Process in batches for better performance
+                show_progress_bar=False  # No progress bar for speed
+            )
             sim_matrix = cosine_similarity(embeddings)
             np.fill_diagonal(sim_matrix, 0)  # Avoid self-loops
             
@@ -177,39 +183,53 @@ class HybridDeepSummarizer:
         all_labels = []
         
         print(f"Creating training data from {len(df)} samples...")
-        for idx, row in df.iterrows():
-            article = str(row[text_col]).strip()
-            summary = str(row[summary_col]).strip()
+        print(f"Processing data in chunks of {config.HYBRID_CHUNK_SIZE}...")
+        
+        # معالجة البيانات على دفعات لتقليل استهلاك الذاكرة
+        from tqdm import tqdm
+        processed_count = 0
+        
+        for chunk_start in range(0, len(df), config.HYBRID_CHUNK_SIZE):
+            chunk_end = min(chunk_start + config.HYBRID_CHUNK_SIZE, len(df))
+            chunk_df = df.iloc[chunk_start:chunk_end]
             
-            if not article or not summary:
-                continue
-            
-            try:
-                sentences, features = self.extract_sentence_features(article)
+            for idx, row in chunk_df.iterrows():
+                article = str(row[text_col]).strip()
+                summary = str(row[summary_col]).strip()
                 
-                if len(sentences) == 0 or features.size == 0:
+                if not article or not summary:
                     continue
                 
-                # Generate labels using ROUGE-1 similarity
-                labels = []
-                for sentence in sentences:
-                    # Calculate ROUGE-1 F1 score between sentence and reference summary
-                    scores = scorer.score(summary, sentence)
-                    rouge_score = scores['rouge1'].fmeasure
+                try:
+                    sentences, features = self.extract_sentence_features(article)
                     
-                    # Label as 1 if similarity is above threshold (0.3), else 0
-                    label = 1 if rouge_score > 0.3 else 0
-                    labels.append(label)
-                
-                all_features.append(features)
-                all_labels.extend(labels)
-                
-                if (idx + 1) % 100 == 0:
-                    print(f"  Processed {idx + 1} samples...")
+                    if len(sentences) == 0 or features.size == 0:
+                        continue
+                    
+                    # Generate labels using ROUGE-1 similarity
+                    labels = []
+                    for sentence in sentences:
+                        # Calculate ROUGE-1 F1 score between sentence and reference summary
+                        scores = scorer.score(summary, sentence)
+                        rouge_score = scores['rouge1'].fmeasure
+                        
+                        # Label as 1 if similarity is above threshold (0.3), else 0
+                        label = 1 if rouge_score > 0.3 else 0
+                        labels.append(label)
+                    
+                    all_features.append(features)
+                    all_labels.extend(labels)
+                    processed_count += 1
+                    
+                except Exception as e:
+                    continue
             
-            except Exception as e:
-                print(f"  Warning: Error processing sample {idx}: {str(e)}")
-                continue
+            # عرض التقدم
+            if (chunk_end) % (config.HYBRID_CHUNK_SIZE * 2) == 0:
+                print(f"  Processed {chunk_end:,}/{len(df)} samples ({processed_count} valid)...")
+            
+            # تحرير الذاكرة بعد معالجة كل دفعة
+            gc.collect()
         
         print(f"Created {len(all_labels)} sentence-level training examples")
         

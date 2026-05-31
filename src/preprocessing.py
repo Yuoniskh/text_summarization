@@ -4,6 +4,8 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from src.utils import normalize_whitespace, remove_news_prefix
 import config
+from tqdm import tqdm
+import gc
 
 # تجميع الأنماط لتحسين الأداء
 HTML_PARSER = 'lxml'
@@ -41,9 +43,11 @@ def clean_text(text: str, is_summary: bool = False) -> str:
     return text
 
 def load_and_clean_data(input_path: str = None) -> pd.DataFrame:
-    """تحميل البيانات من CSV وتنظيفها."""
+    """تحميل البيانات من CSV وتنظيفها مع معالجة البيانات الكبيرة بكفاءة."""
     input_path = input_path or config.RAW_DATA_PATH
+    print(f"جاري تحميل البيانات من {input_path}...")
     df = pd.read_csv(input_path)
+    print(f"تم تحميل {len(df):,} صف")
 
     # التحقق من الأعمدة
     required_cols = ['article', 'highlights']
@@ -53,31 +57,49 @@ def load_and_clean_data(input_path: str = None) -> pd.DataFrame:
 
     # نسخ الأعمدة المطلوبة
     df_clean = df[required_cols].copy()
+    del df  # تحرير الذاكرة
+    gc.collect()
 
-    # تنظيف النصوص
-    df_clean['article'] = df_clean['article'].apply(lambda x: clean_text(x, is_summary=False))
-    df_clean['highlights'] = df_clean['highlights'].apply(lambda x: clean_text(x, is_summary=True))
+    # تنظيف النصوص مع شريط التقدم
+    print("جاري تنظيف النصوص...")
+    tqdm.pandas(desc="تنظيف المقالات")
+    df_clean['article'] = df_clean['article'].progress_apply(lambda x: clean_text(x, is_summary=False))
+    
+    tqdm.pandas(desc="تنظيف الملخصات")
+    df_clean['highlights'] = df_clean['highlights'].progress_apply(lambda x: clean_text(x, is_summary=True))
 
     # إزالة الصفوف الفارغة بعد التنظيف
+    print("إزالة الصفوف الفارغة...")
     df_clean = df_clean[(df_clean['article'].str.strip() != '') & (df_clean['highlights'].str.strip() != '')]
+    print(f"بقي {len(df_clean):,} صف بعد إزالة الصفوف الفارغة")
 
     # فلترة حسب عدد الكلمات
+    print("فلترة البيانات حسب عدد الكلمات...")
     df_clean['article_word_count'] = df_clean['article'].apply(lambda x: len(str(x).split()))
     df_clean['summary_word_count'] = df_clean['highlights'].apply(lambda x: len(str(x).split()))
 
+    initial_count = len(df_clean)
     df_clean = df_clean[
         (df_clean['article_word_count'] >= config.MIN_ARTICLE_WORDS) &
         (df_clean['summary_word_count'] >= config.MIN_SUMMARY_WORDS)
     ]
     if config.MAX_ARTICLE_WORDS:
         df_clean = df_clean[df_clean['article_word_count'] <= config.MAX_ARTICLE_WORDS]
+    
+    filtered_count = len(df_clean)
+    print(f"تم حذف {initial_count - filtered_count:,} صف بسبب حدود الكلمات")
 
     # إزالة التكرارات
+    print("إزالة التكرارات...")
+    initial_count = len(df_clean)
     df_clean = df_clean.drop_duplicates(subset=['article']).reset_index(drop=True)
+    print(f"تم حذف {initial_count - len(df_clean):,} صف مكرر")
 
     # حذف أعمدة العد المؤقتة
     df_clean = df_clean.drop(columns=['article_word_count', 'summary_word_count'])
-
+    gc.collect()
+    
+    print(f"عدد الصفوف النهائي: {len(df_clean):,}")
     return df_clean
 
 if __name__ == "__main__":

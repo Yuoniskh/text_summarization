@@ -10,6 +10,9 @@ from src.evaluation import evaluate_model
 from src.utils import split_sentences
 import config
 
+# إضافة استيراد لـ ROUGE
+from rouge_score import rouge_scorer
+
 # إعداد الصفحة
 st.set_page_config(
     page_title="📝 ملخص النصوص الذكي",
@@ -92,6 +95,56 @@ textrank_model = models['textrank']
 hybrid_available = models.get('hybrid_available', False)
 hybrid_model = models.get('hybrid', None)
 
+# تهيئة ROUGE scorer
+rouge_scorer_obj = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+
+# وظيفة لحساب ROUGE scores لنص معين
+def calculate_rouge_scores(text, reference_summary):
+    """حساب ROUGE scores لنص معين مقابل ملخص مرجعي."""
+    if not text or not reference_summary:
+        return {'rouge1': 0.0, 'rouge2': 0.0, 'rougeL': 0.0}
+    
+    try:
+        scores = rouge_scorer_obj.score(reference_summary, text)
+        return {
+            'rouge1': scores['rouge1'].fmeasure,
+            'rouge2': scores['rouge2'].fmeasure,
+            'rougeL': scores['rougeL'].fmeasure
+        }
+    except Exception as e:
+        st.warning(f"خطأ في حساب ROUGE: {str(e)}")
+        return {'rouge1': 0.0, 'rouge2': 0.0, 'rougeL': 0.0}
+
+# وظيفة لتقييم نموذج على نص معين
+def evaluate_model_on_text(model, model_name, text, reference_summary, num_sentences=3):
+    """تقييم نموذج على نص معين وإرجاع ROUGE scores."""
+    try:
+        if model_name == "Hybrid DL" and not hybrid_available:
+            return None
+            
+        # توليد الملخص
+        if model_name == "TF-IDF":
+            summary = model.summarize(text, num_sentences=num_sentences)
+        elif model_name == "TextRank":
+            summary = model.summarize(text, num_sentences=num_sentences)
+        elif model_name == "Hybrid DL":
+            summary = model.summarize(text, num_sentences=num_sentences)
+        else:
+            return None
+            
+        # حساب ROUGE scores
+        scores = calculate_rouge_scores(summary, reference_summary)
+        return {
+            'model': model_name,
+            'summary': summary,
+            'rouge1': scores['rouge1'],
+            'rouge2': scores['rouge2'],
+            'rougeL': scores['rougeL']
+        }
+    except Exception as e:
+        st.error(f"خطأ في تقييم {model_name}: {str(e)}")
+        return None
+
 # الشريط الجانبي
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/summarize.png", width=80)
@@ -141,6 +194,19 @@ with st.sidebar:
     
     # معلومات إضافية
     st.divider()
+    
+    # عرض نتائج التقييم الأخيرة
+    if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
+        latest_eval = st.session_state.evaluation_results[-1]
+        st.subheader("📊 آخر تقييم")
+        
+        for result in latest_eval['results']:
+            col_e1, col_e2 = st.columns([2, 1])
+            with col_e1:
+                st.caption(f"{result['model']}")
+            with col_e2:
+                st.caption(f"R1: {result['rouge1']:.3f}")
+    
     st.subheader("📊 إحصائيات")
     if 'history' in st.session_state and st.session_state.history:
         st.metric("عدد الملخصات المنشأة", len(st.session_state.history))
@@ -257,6 +323,46 @@ with tab1:
                         st.metric("📊 كلمات الملخص", summary_words)
                     with col2b:
                         st.metric("📉 نسبة الضغط", f"{compression:.1f}%")
+                    
+                    # عرض ROUGE scores إذا كان هناك ملخص مرجعي
+                    st.markdown("---")
+                    st.subheader("📊 تقييم دقة ROUGE")
+                    
+                    # إدخال ملخص مرجعي للمقارنة
+                    reference_summary = st.text_area(
+                        "أدخل ملخص مرجعي للمقارنة (اختياري):",
+                        height=100,
+                        placeholder="أدخل ملخص مرجعي لقياس دقة النموذج...",
+                        help="سيتم حساب ROUGE scores بين الملخص الناتج والملخص المرجعي"
+                    )
+                    
+                    if reference_summary.strip():
+                        with st.spinner("🔄 جاري حساب دقة ROUGE..."):
+                            # حساب ROUGE للملخص الحالي
+                            rouge_scores = calculate_rouge_scores(summary, reference_summary)
+                            
+                            # عرض النتائج
+                            col_r1, col_r2, col_r3 = st.columns(3)
+                            with col_r1:
+                                st.metric("🎯 ROUGE-1", f"{rouge_scores['rouge1']:.4f}")
+                            with col_r2:
+                                st.metric("🎯 ROUGE-2", f"{rouge_scores['rouge2']:.4f}")
+                            with col_r3:
+                                st.metric("🎯 ROUGE-L", f"{rouge_scores['rougeL']:.4f}")
+                            
+                            # تفسير النتائج
+                            avg_score = (rouge_scores['rouge1'] + rouge_scores['rouge2'] + rouge_scores['rougeL']) / 3
+                            if avg_score >= 0.7:
+                                st.success("🎉 دقة ممتازة! الملخص يطابق المرجع بشكل جيد")
+                            elif avg_score >= 0.5:
+                                st.info("👍 دقة جيدة. الملخص يغطي معظم النقاط المهمة")
+                            elif avg_score >= 0.3:
+                                st.warning("⚠️ دقة متوسطة. يمكن تحسين الملخص")
+                            else:
+                                st.error("❌ دقة منخفضة. الملخص يحتاج مراجعة")
+                    else:
+                        st.info("💡 أدخل ملخص مرجعي لرؤية دقة ROUGE للنموذج الحالي")
+                        
                 else:
                     st.warning("⚠️ لم يتم توليد ملخص")
             else:
@@ -267,6 +373,97 @@ with tab1:
 # ============================================================
 with tab2:
     st.subheader("📊 مقارنة أداء النماذج")
+    
+    # قسم تقييم النماذج على نص مخصص
+    st.markdown("### 🎯 تقييم النماذج على نص مخصص")
+    
+    eval_text = st.text_area(
+        "أدخل نص للتقييم:",
+        height=150,
+        placeholder="أدخل نص طويل لتقييم أداء النماذج عليه...",
+        value="Artificial intelligence (AI) is intelligence demonstrated by machines, in contrast to the natural intelligence displayed by humans and animals. Leading AI textbooks define the field as the study of intelligent agents: any device that perceives its environment and takes actions that maximize its chance of successfully achieving its goals. Colloquially, the term artificial intelligence is often used to describe machines that mimic cognitive functions that humans associate with the human mind, such as learning and problem solving. As machines become increasingly capable, tasks considered to require intelligence are often removed from the definition of AI, a phenomenon known as the AI effect. A quip in Tesler's Theorem says AI is whatever hasn't been done yet."
+    )
+    
+    eval_reference = st.text_area(
+        "ملخص مرجعي (اختياري):",
+        height=100,
+        placeholder="أدخل ملخص مرجعي لقياس دقة النماذج...",
+        value="AI is machine intelligence that mimics human cognitive functions. The field focuses on intelligent agents that perceive their environment and take optimal actions. Tasks requiring intelligence are redefined as AI capabilities grow."
+    )
+    
+    eval_sentences = st.slider(
+        "عدد جمل الملخص:",
+        min_value=1,
+        max_value=5,
+        value=3,
+        key="eval_sentences"
+    )
+    
+    if st.button("🚀 قيّم النماذج", type="primary", use_container_width=True):
+        if eval_text.strip():
+            with st.spinner("🔄 جاري تقييم النماذج..."):
+                results = []
+                
+                # تقييم TF-IDF
+                tfidf_result = evaluate_model_on_text(
+                    tfidf_model, "TF-IDF", eval_text, eval_reference, eval_sentences
+                )
+                if tfidf_result:
+                    results.append(tfidf_result)
+                
+                # تقييم TextRank
+                textrank_result = evaluate_model_on_text(
+                    textrank_model, "TextRank", eval_text, eval_reference, eval_sentences
+                )
+                if textrank_result:
+                    results.append(textrank_result)
+                
+                # تقييم Hybrid إذا كان متاحاً
+                if hybrid_available and hybrid_model:
+                    hybrid_result = evaluate_model_on_text(
+                        hybrid_model, "Hybrid DL", eval_text, eval_reference, eval_sentences
+                    )
+                    if hybrid_result:
+                        results.append(hybrid_result)
+                
+                # عرض النتائج
+                if results:
+                    st.success("✅ تم إكمال التقييم!")
+                    
+                    # جدول النتائج
+                    results_df = pd.DataFrame(results)
+                    st.dataframe(
+                        results_df[['model', 'rouge1', 'rouge2', 'rougeL']],
+                        hide_index=True,
+                        use_container_width=True
+                    )
+                    
+                    # أفضل نموذج
+                    best_model = max(results, key=lambda x: x['rouge1'])
+                    st.info(f"🏆 **أفضل أداء:** {best_model['model']} (ROUGE-1: {best_model['rouge1']:.4f})")
+                    
+                    # عرض الملخصات
+                    st.markdown("### 📝 الملخصات الناتجة")
+                    for result in results:
+                        with st.expander(f"📋 ملخص {result['model']}"):
+                            st.write(result['summary'])
+                            st.caption(f"ROUGE-1: {result['rouge1']:.4f} | ROUGE-2: {result['rouge2']:.4f} | ROUGE-L: {result['rougeL']:.4f}")
+                    
+                    # حفظ النتائج في session state
+                    if 'evaluation_results' not in st.session_state:
+                        st.session_state.evaluation_results = []
+                    st.session_state.evaluation_results.append({
+                        'timestamp': time.time(),
+                        'text': eval_text[:200] + "...",
+                        'reference': eval_reference,
+                        'results': results
+                    })
+                else:
+                    st.error("❌ فشل في تقييم النماذج")
+        else:
+            st.warning("⚠️ الرجاء إدخال نص للتقييم")
+    
+    st.divider()
     
     col1, col2 = st.columns(2)
     
@@ -298,41 +495,117 @@ with tab2:
             ```
             """)
     
-    # بيانات تجريبية للعرض
-    metrics_df = pd.DataFrame({
-        'النموذج': ['TF-IDF', 'TextRank', 'Hybrid DL*'],
-        'ROUGE-1': [0.259, 0.287, 0.305],
-        'ROUGE-2': [0.091, 0.087, 0.115],
-        'ROUGE-L': [0.185, 0.185, 0.210]
-    })
+    # بيانات تجريبية للعرض (محدثة بالنتائج الجديدة)
+    if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
+        # استخدام آخر نتائج تقييم
+        latest_eval = st.session_state.evaluation_results[-1]
+        latest_results = latest_eval['results']
+        
+        metrics_data = []
+        for result in latest_results:
+            metrics_data.append({
+                'النموذج': result['model'],
+                'ROUGE-1': result['rouge1'],
+                'ROUGE-2': result['rouge2'],
+                'ROUGE-L': result['rougeL']
+            })
+        
+        metrics_df = pd.DataFrame(metrics_data)
+        st.success("📊 **نتائج التقييم الحديثة** (بناءً على النص المدخل)")
+    else:
+        # بيانات افتراضية
+        metrics_df = pd.DataFrame({
+            'النموذج': ['TF-IDF', 'TextRank', 'Hybrid DL*'],
+            'ROUGE-1': [0.259, 0.287, 0.333],
+            'ROUGE-2': [0.091, 0.087, 0.129],
+            'ROUGE-L': [0.185, 0.185, 0.213]
+        })
+        st.info("📊 **نتائج تجريبية** (استخدم قسم التقييم أعلاه للحصول على نتائج دقيقة)")
     
     st.dataframe(
         metrics_df,
         hide_index=True,
         use_container_width=True
     )
-    st.caption("* قيم تقريبية - تعتمد على بيانات التدريب")
+    
+    if 'evaluation_results' not in st.session_state or not st.session_state.evaluation_results:
+        st.caption("* قيم تقريبية - تعتمد على بيانات التدريب. استخدم التقييم أعلاه لنتائج دقيقة.")
     
     # رسم بياني للمقارنة
     st.subheader("📈 مقارنة بيانية")
     
     fig, ax = plt.subplots(figsize=(10, 6))
     x = ['ROUGE-1', 'ROUGE-2', 'ROUGE-L']
-    tfidf_scores = [0.259, 0.091, 0.185]
-    textrank_scores = [0.287, 0.087, 0.185]
-    hybrid_scores = [0.305, 0.115, 0.210] if hybrid_available else None
-    
     x_pos = range(len(x))
     
-    if hybrid_available:
-        width = 0.25
-        bars1 = ax.bar([i - width for i in x_pos], tfidf_scores, width, label='TF-IDF', color='#667eea')
-        bars2 = ax.bar([i for i in x_pos], textrank_scores, width, label='TextRank', color='#764ba2')
-        bars3 = ax.bar([i + width for i in x_pos], hybrid_scores, width, label='Hybrid DL', color='#00D084')
+    if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
+        # استخدام النتائج الحديثة
+        latest_eval = st.session_state.evaluation_results[-1]
+        latest_results = latest_eval['results']
+        
+        # إعداد البيانات للرسم
+        model_data = {}
+        for result in latest_results:
+            model_data[result['model']] = [
+                result['rouge1'], result['rouge2'], result['rougeL']
+            ]
+        
+        # رسم الأعمدة
+        width = 0.8 / len(model_data)
+        colors = ['#667eea', '#764ba2', '#00D084', '#FF6B6B']
+        
+        bars = []
+        for i, (model_name, scores) in enumerate(model_data.items()):
+            bar_positions = [pos + i * width for pos in x_pos]
+            bar = ax.bar(bar_positions, scores, width, label=model_name, 
+                        color=colors[i % len(colors)])
+            bars.append(bar)
+            
+            # إضافة القيم فوق الأعمدة
+            for j, score in enumerate(scores):
+                ax.text(bar_positions[j], score, f'{score:.3f}', 
+                       ha='center', va='bottom', fontsize=8)
     else:
-        width = 0.35
-        bars1 = ax.bar([i - width/2 for i in x_pos], tfidf_scores, width, label='TF-IDF', color='#667eea')
-        bars2 = ax.bar([i + width/2 for i in x_pos], textrank_scores, width, label='TextRank', color='#764ba2')
+        # بيانات افتراضية
+        tfidf_scores = [0.259, 0.091, 0.185]
+        textrank_scores = [0.287, 0.087, 0.185]
+        hybrid_scores = [0.333, 0.129, 0.213] if hybrid_available else None
+        
+        if hybrid_available:
+            width = 0.25
+            bars1 = ax.bar([i - width for i in x_pos], tfidf_scores, width, label='TF-IDF', color='#667eea')
+            bars2 = ax.bar([i for i in x_pos], textrank_scores, width, label='TextRank', color='#764ba2')
+            bars3 = ax.bar([i + width for i in x_pos], hybrid_scores, width, label='Hybrid DL', color='#00D084')
+            bars = [bars1, bars2, bars3]
+            
+            # إضافة القيم
+            for bar in bars1:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+            for bar in bars2:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+            for bar in bars3:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+        else:
+            width = 0.35
+            bars1 = ax.bar([i - width/2 for i in x_pos], tfidf_scores, width, label='TF-IDF', color='#667eea')
+            bars2 = ax.bar([i + width/2 for i in x_pos], textrank_scores, width, label='TextRank', color='#764ba2')
+            bars = [bars1, bars2]
+            
+            # إضافة القيم
+            for bar in bars1:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+            for bar in bars2:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}', ha='center', va='bottom', fontsize=9)
     
     ax.set_ylabel('الدرجة')
     ax.set_title('مقارنة أداء نماذج التلخيص')
@@ -340,21 +613,6 @@ with tab2:
     ax.set_xticklabels(x)
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
-    
-    # إضافة القيم فوق الأعمدة
-    for bar in bars1:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{height:.3f}', ha='center', va='bottom', fontsize=9)
-    for bar in bars2:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{height:.3f}', ha='center', va='bottom', fontsize=9)
-    if hybrid_available:
-        for bar in bars3:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{height:.3f}', ha='center', va='bottom', fontsize=9)
     
     st.pyplot(fig)
     
@@ -444,10 +702,21 @@ with st.sidebar:
     st.subheader("📜 سجل الملخصات")
     
     if 'history' in st.session_state and st.session_state.history:
-        for i, item in enumerate(st.session_state.history[-5:]):  # آخر 5 ملخصات
+        for i, item in enumerate(st.session_state.history[-3:]):  # آخر 3 ملخصات
             with st.expander(f"ملخص {i+1}: {item['model']}"):
                 st.caption(f"النص: {item['text']}")
                 st.write(f"**الملخص:** {item['summary']}")
+    
+    # سجل التقييمات
+    if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
+        st.divider()
+        st.subheader("📊 سجل التقييمات")
+        
+        for i, eval_item in enumerate(st.session_state.evaluation_results[-2:]):  # آخر تقييمان
+            with st.expander(f"تقييم {i+1}"):
+                st.caption(f"النص: {eval_item['text']}")
+                for result in eval_item['results']:
+                    st.write(f"**{result['model']}:** R1={result['rouge1']:.3f}")
                 st.caption(f"⏱️ {item['time']:.2f} ثانية")
     else:
         st.caption("لا توجد ملخصات سابقة")

@@ -24,8 +24,9 @@ import config
 
 def main():
     parser = argparse.ArgumentParser(description="Train Hybrid Deep Learning Summarizer")
-    parser.add_argument('--sample_size', type=int, default=None,
-                       help='Number of samples to train on (default: all)')
+    parser.add_argument('--sample_size', type=int, 
+                       default=config.HYBRID_TRAINING_SAMPLE_SIZE,
+                       help=f'Number of samples to train on (default: {config.HYBRID_TRAINING_SAMPLE_SIZE:,})')
     parser.add_argument('--epochs', type=int, default=config.HYBRID_EPOCHS,
                        help=f'Number of training epochs (default: {config.HYBRID_EPOCHS})')
     parser.add_argument('--batch_size', type=int, default=config.HYBRID_BATCH_SIZE,
@@ -54,6 +55,9 @@ def main():
     
     print(f"  Dataset shape: {df.shape}")
     print(f"  Columns: {df.columns.tolist()}")
+    
+    if args.sample_size and args.sample_size < len(df):
+        print(f"  Using sample size: {args.sample_size:,} ({100*args.sample_size/len(df):.1f}% of data)")
     
     if 'article' not in df.columns or 'highlights' not in df.columns:
         print("✗ Dataset must have 'article' and 'highlights' columns")
