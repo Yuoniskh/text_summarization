@@ -368,7 +368,7 @@ with st.sidebar:
     num_sentences = st.slider(
         "عدد جمل الملخص:",
         min_value=1,
-        max_value=10,
+        max_value=15,
         value=3,
         help="اختر عدد الجمل التي تريدها في الملخص الناتج"
     )
@@ -454,7 +454,7 @@ with tab1:
                 "أدخل النص الذي تريد تلخيصه:",
                 height=300,
                 placeholder="الصق النص هنا...",
-                value="Artificial intelligence (AI) is intelligence demonstrated by machines, in contrast to the natural intelligence displayed by humans and animals. Leading AI textbooks define the field as the study of intelligent agents. AI is used in many applications such as machine translation and chatbots."
+                value=""
             )
         
         if text_input:
@@ -562,20 +562,20 @@ with tab2:
         "أدخل نص للتقييم:",
         height=150,
         placeholder="أدخل نص طويل لتقييم أداء النماذج عليه...",
-        value="Artificial intelligence (AI) is intelligence demonstrated by machines, in contrast to the natural intelligence displayed by humans and animals. Leading AI textbooks define the field as the study of intelligent agents: any device that perceives its environment and takes actions that maximize its chance of successfully achieving its goals."
+        value=""
     )
     
     eval_reference = st.text_area(
         "ملخص مرجعي (اختياري):",
         height=100,
         placeholder="أدخل ملخص مرجعي لقياس دقة النماذج...",
-        value="AI is machine intelligence that mimics human cognitive functions. The field focuses on intelligent agents that perceive their environment and take optimal actions."
+        value=""
     )
     
     eval_sentences = st.slider(
         "عدد جمل الملخص:",
         min_value=1,
-        max_value=5,
+        max_value=15,
         value=3,
         key="eval_sentences"
     )
@@ -819,17 +819,26 @@ with tab2:
             لتدريب النموذج:
             ```bash
             python train_hybrid_model.py""")   
+# في الجزء الذي يعرض تاريخ التقييمات (حوالي السطر 826)
+# ✅ التصحيح: التحقق من وجود المتغير
     if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
         st.markdown("---")
         st.markdown("### 📋 تاريخ التقييمات")
-
-    for i, eval_item in enumerate(st.session_state.evaluation_results[-3:]):
-        with st.expander(f"تقييم {len(st.session_state.evaluation_results) - 2 + i}: {eval_item['text']}"):
-            eval_df = pd.DataFrame(eval_item['results'])
-            st.dataframe(eval_df[['model', 'rouge1', 'rouge2', 'rougeL']],
-            hide_index=True, use_container_width=True)
-
-# ============================================================
+        
+        # عرض آخر 3 تقييمات مع التحقق من أن القائمة ليست فارغة
+        eval_history = st.session_state.evaluation_results[-3:] if len(st.session_state.evaluation_results) >= 3 else st.session_state.evaluation_results
+        
+        for i, eval_item in enumerate(eval_history):
+            with st.expander(f"تقييم {len(st.session_state.evaluation_results) - len(eval_history) + i + 1}: {eval_item.get('text', 'نص غير متاح')}"):
+                eval_df = pd.DataFrame(eval_item.get('results', []))
+                if not eval_df.empty:
+                    st.dataframe(eval_df[['model', 'rouge1', 'rouge2', 'rougeL']], 
+                                hide_index=True, use_container_width=True)
+                else:
+                    st.info("لا توجد نتائج تقييم متاحة")
+    else:
+        # إذا لم يكن هناك تقييمات سابقة، يمكن عرض رسالة
+        pass  # أو st.info("لا توجد تقييمات سابقة")=========================================================
 # تبويب 3: عن المشروع
 # ============================================================
 with tab3:
