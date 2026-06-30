@@ -63,7 +63,13 @@ class ExtractiveSummarizer:
         np.fill_diagonal(sim_matrix, 0)  # لا تربط الجملة بنفسها
 
         nx_graph = nx.from_numpy_array(sim_matrix)
-        scores_dict = nx.pagerank(nx_graph)
+        try:
+            # المحاولة العادية مع وسيط tol مرن لمنع التشنج الحسابي
+            scores_dict = nx.pagerank(nx_graph, max_iter=500, tol=1e-3)
+        except nx.PowerIterationFailedConvergence:
+            # الحل البديل: إذا فشلت الخوارزمية، نوزع الأوزان بالتساوي على الجمل لكي لا يتوقف الكود
+            print("\n⚠️ Warning: TextRank failed to converge on a complex text. Applying fallback uniform weights.")
+            scores_dict = {node: 1.0 / len(nx_graph) for node in nx_graph.nodes()}
         scores = np.array([scores_dict[i] for i in range(len(sentences))])
         return scores
 

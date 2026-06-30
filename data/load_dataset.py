@@ -7,10 +7,10 @@ def load_cnn_dataset():
     return dataset
 
 def save_to_csv(dataset, filename):
-    df = pd.DataFrame(dataset['train'][:3000]) 
+    df = pd.DataFrame(dataset['train']).sample(n = 10000).reset_index(drop=True) 
     df.to_csv(filename, index=False)
     return df
 
 dataset = load_cnn_dataset()
-df = save_to_csv(dataset, 'my_training_data.csv')
+df = save_to_csv(dataset, './data/my_training_data.csv')
 print(df.head)
