@@ -21,7 +21,6 @@ def setup_nltk():
     nltk.download('stopwords')
     nltk.download('averaged_perceptron_tagger')
 
-# استدعاء الدالة
 setup_nltk()
 st.set_page_config(
     page_title="📝 ملخص النصوص الذكي",
