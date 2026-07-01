@@ -12,10 +12,8 @@ from src.utils import split_sentences
 import config
 import json
 
-# إضافة استيراد لـ ROUGE
 from rouge_score import rouge_scorer
 
-# إعداد الصفحة
 st.set_page_config(
     page_title="📝 ملخص النصوص الذكي",
     page_icon="📚",
@@ -23,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS مخصص لتحسين المظهر
 st.markdown("""
 <style>
     .main-header {
@@ -72,10 +69,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# تهيئة النماذج (تخزين مؤقت لتجنب إعادة التحميل)
 @st.cache_resource
 def load_models():
-    """تحميل نماذج التلخيص (يتم مرة واحدة فقط)."""
+
     models = {}
     
     with st.spinner("🔄 جاري تحميل نموذج TF-IDF..."):
@@ -84,7 +80,6 @@ def load_models():
     with st.spinner("🔄 جاري تحميل نموذج TextRank (قد يستغرق دقيقة)..."):
         models['textrank'] = ExtractiveSummarizer(method='textrank')
     
-    # محاولة تحميل نموذج Hybrid
     if os.path.exists(config.HYBRID_MODEL_PATH):
         try:
             with st.spinner("🔄 جاري تحميل نموذج Hybrid Deep Learning..."):
@@ -98,24 +93,18 @@ def load_models():
     
     return models
 
-# تحميل النماذج
 all_models = load_models()
 
-# استخراج النماذج من القاموس بشكل آمن
 tfidf_model = all_models['tfidf']
 textrank_model = all_models['textrank']
 hybrid_available = all_models.get('hybrid_available', False)
 hybrid_model = all_models.get('hybrid', None)
 
-# تهيئة ROUGE scorer
 rouge_scorer_obj = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
 
-# ============================================================
-# دوال مساعدة
-# ============================================================
 
 def calculate_rouge_scores(text, reference_summary):
-    """حساب ROUGE scores لنص معين مقابل ملخص مرجعي."""
+
     if not text or not reference_summary:
         return {'rouge1': 0.0, 'rouge2': 0.0, 'rougeL': 0.0}
     
@@ -131,12 +120,11 @@ def calculate_rouge_scores(text, reference_summary):
         return {'rouge1': 0.0, 'rouge2': 0.0, 'rougeL': 0.0}
 
 def evaluate_model_on_text(model, model_name, text, reference_summary, num_sentences=3):
-    """تقييم نموذج على نص معين وإرجاع ROUGE scores."""
+
     try:
         if model_name == "Hybrid DL" and not hybrid_available:
             return None
             
-        # توليد الملخص
         if model_name == "TF-IDF":
             summary = model.summarize(text, num_sentences=num_sentences)
         elif model_name == "TextRank":
@@ -146,7 +134,6 @@ def evaluate_model_on_text(model, model_name, text, reference_summary, num_sente
         else:
             return None
             
-        # حساب ROUGE scores
         scores = calculate_rouge_scores(summary, reference_summary)
         return {
             'model': model_name,
@@ -160,7 +147,7 @@ def evaluate_model_on_text(model, model_name, text, reference_summary, num_sente
         return None
 
 def plot_model_comparison(results, title="مقارنة أداء نماذج التلخيص"):
-    """رسم مقارنة بين النماذج باستخدام ROUGE scores."""
+
     if not results:
         return None
     
@@ -168,7 +155,6 @@ def plot_model_comparison(results, title="مقارنة أداء نماذج ال�
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
-    # أعمدة مقارنة
     x = ['ROUGE-1', 'ROUGE-2', 'ROUGE-L']
     x_pos = np.arange(len(x))
     width = 0.8 / len(df)
@@ -192,7 +178,6 @@ def plot_model_comparison(results, title="مقارنة أداء نماذج ال�
     axes[0].grid(axis='y', alpha=0.3)
     axes[0].set_ylim(0, 1.05)
     
-    # رادار Chart
     if len(df) >= 3:
         categories = ['ROUGE-1', 'ROUGE-2', 'ROUGE-L']
         N = len(categories)
@@ -220,7 +205,7 @@ def plot_model_comparison(results, title="مقارنة أداء نماذج ال�
     return fig
 
 def load_training_history():
-    """تحميل تاريخ التدريب من ملف CSV."""
+
     history_path = config.TRAINING_HISTORY_CSV
     if os.path.exists(history_path):
         try:
@@ -231,7 +216,7 @@ def load_training_history():
     return None
 
 def load_metrics_json():
-    """تحميل مقاييس التدريب من ملف JSON."""
+
     metrics_path = config.METRICS_JSON
     if os.path.exists(metrics_path):
         try:
@@ -243,13 +228,12 @@ def load_metrics_json():
     return None
 
 def plot_training_curves(history_df):
-    """رسم منحنيات التدريب الكاملة."""
+
     if history_df is None or history_df.empty:
         return None
     
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     
-    # 1. Loss
     if 'train_loss' in history_df.columns and 'val_loss' in history_df.columns:
         axes[0, 0].plot(history_df['train_loss'], label='Training Loss', color='#FF6B6B', linewidth=2)
         axes[0, 0].plot(history_df['val_loss'], label='Validation Loss', color='#FFB347', linewidth=2)
@@ -265,7 +249,6 @@ def plot_training_curves(history_df):
                           label=f'Best: {history_df["val_loss"].min():.4f}')
         axes[0, 0].legend()
     
-    # 2. Accuracy
     if 'train_accuracy' in history_df.columns and 'val_accuracy' in history_df.columns:
         axes[0, 1].plot(history_df['train_accuracy'], label='Training Accuracy', color='#00D084', linewidth=2)
         axes[0, 1].plot(history_df['val_accuracy'], label='Validation Accuracy', color='#667eea', linewidth=2)
@@ -281,7 +264,6 @@ def plot_training_curves(history_df):
                           label=f'Best: {history_df["val_accuracy"].max():.4f}')
         axes[0, 1].legend()
     
-    # 3. F1 Score
     if 'train_f1' in history_df.columns and 'val_f1' in history_df.columns:
         axes[0, 2].plot(history_df['train_f1'], label='Training F1', color='#764ba2', linewidth=2)
         axes[0, 2].plot(history_df['val_f1'], label='Validation F1', color='#667eea', linewidth=2)
@@ -297,7 +279,6 @@ def plot_training_curves(history_df):
                           label=f'Best: {history_df["val_f1"].max():.4f}')
         axes[0, 2].legend()
     
-    # 4. Precision
     if 'train_precision' in history_df.columns and 'val_precision' in history_df.columns:
         axes[1, 0].plot(history_df['train_precision'], label='Training Precision', color='#FF6B6B', linewidth=2)
         axes[1, 0].plot(history_df['val_precision'], label='Validation Precision', color='#FFB347', linewidth=2)
@@ -307,7 +288,6 @@ def plot_training_curves(history_df):
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
     
-    # 5. Recall
     if 'train_recall' in history_df.columns and 'val_recall' in history_df.columns:
         axes[1, 1].plot(history_df['train_recall'], label='Training Recall', color='#4ECDC4', linewidth=2)
         axes[1, 1].plot(history_df['val_recall'], label='Validation Recall', color='#45B7D1', linewidth=2)
@@ -317,7 +297,6 @@ def plot_training_curves(history_df):
         axes[1, 1].legend()
         axes[1, 1].grid(True, alpha=0.3)
     
-    # 6. مقارنة جميع المقاييس
     if all(col in history_df.columns for col in ['val_accuracy', 'val_precision', 'val_recall', 'val_f1']):
         axes[1, 2].plot(history_df['val_accuracy'], label='Accuracy', color='#00D084', linewidth=2)
         axes[1, 2].plot(history_df['val_precision'], label='Precision', color='#FF6B6B', linewidth=2)
@@ -334,7 +313,7 @@ def plot_training_curves(history_df):
     return fig
 
 def plot_confusion_matrix_from_file():
-    """عرض مصفوفة الارتباك من الملف المحفوظ."""
+
     cm_path = config.CONFUSION_MATRIX_IMAGE
     if os.path.exists(cm_path):
         try:
@@ -346,14 +325,10 @@ def plot_confusion_matrix_from_file():
             return None
     return None
 
-# ============================================================
-# الشريط الجانبي
-# ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/summarize.png", width=80)
     st.title("⚙️ الإعدادات")
     
-    # اختيار النموذج
     model_options = ["🤖 TextRank (أفضل دقة)", "📊 TF-IDF (أسرع)"]
     if hybrid_available:
         model_options.append("🧠 Hybrid Deep Learning (متقدم)")
@@ -364,7 +339,6 @@ with st.sidebar:
         help="اختر النموذج المناسب لاحتياجاتك"
     )
     
-    # عدد الجمل
     num_sentences = st.slider(
         "عدد جمل الملخص:",
         min_value=1,
@@ -375,7 +349,6 @@ with st.sidebar:
     
     st.divider()
     
-    # معلومات عن النماذج المتاحة
     st.subheader("📋 النماذج المتاحة")
     col1, col2 = st.columns(2)
     with col1:
@@ -397,7 +370,6 @@ with st.sidebar:
     
     st.divider()
     
-    # عرض نتائج التقييم الأخيرة
     if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
         latest_eval = st.session_state.evaluation_results[-1]
         st.subheader("📊 آخر تقييم")
@@ -414,7 +386,6 @@ with st.sidebar:
     
     st.divider()
     
-    # قسم التحميل
     st.subheader("📁 تحميل ملف")
     uploaded_file = st.file_uploader(
         "اختر ملف نصي (.txt):",
@@ -422,9 +393,6 @@ with st.sidebar:
         help="يمكنك تحميل ملف نصي لتلخيصه"
     )
 
-# ============================================================
-# المحتوى الرئيسي
-# ============================================================
 st.markdown("""
 <div class="main-header">
     <h1>📝 ملخص النصوص الذكي</h1>
@@ -432,14 +400,8 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# تعريف التبويبات
-# ============================================================
 tab1, tab2, tab3 = st.tabs(["📝 تلخيص النصوص", "📊 المقارنة والتقييم", "ℹ️ عن المشروع"])
 
-# ============================================================
-# تبويب 1: تلخيص النصوص
-# ============================================================
 with tab1:
     col1, col2 = st.columns([1, 1])
     
@@ -549,13 +511,9 @@ with tab1:
             else:
                 st.warning("⚠️ الرجاء إدخال نص للتلخيص")
 
-# ============================================================
-# تبويب 2: المقارنة والتقييم
-# ============================================================
 with tab2:
     st.subheader("📊 مقارنة وتقييم النماذج")
     
-    # القسم 1: تقييم النماذج على نص مخصص
     st.markdown("### 🎯 تقييم النماذج على نص مخصص")
     
     eval_text = st.text_area(
@@ -655,7 +613,6 @@ with tab2:
         else:
             st.warning("⚠️ الرجاء إدخال نص للتقييم")
     
-    # القسم 2: مقاييس النموذج الهجين
     st.markdown("---")
     st.markdown("### 🧠 تقييم النموذج الهجين (من التدريب)")
     
@@ -706,7 +663,6 @@ with tab2:
         st.warning("⚠️ النموذج الهجين غير متاح. قم بتدريبه أولاً.")
         st.code("python train_hybrid_model.py", language="bash")
     
-    # القسم 3: منحنيات التدريب
     if st.session_state.get('show_training_curves', False):
         st.markdown("---")
         st.markdown("### 📈 منحنيات تدريب النموذج الهجين")
@@ -748,7 +704,7 @@ with tab2:
                 st.info("ℹ️ لا توجد بيانات تدريب. قم بتدريب النموذج الهجين أولاً.")
         else:
             st.warning("⚠️ النموذج الهجين غير متاح. قم بتدريبه أولاً.")
-    # القسم 4: مصفوفة الارتباك
+
     if st.session_state.get('show_confusion_matrix', False):
         st.markdown("---")
         st.markdown("### 🎯 مصفوفة الارتباك (Confusion Matrix)")
@@ -789,7 +745,6 @@ with tab2:
         else:
             st.warning("⚠️ النموذج الهجين غير متاح. قم بتدريبه أولاً.")
     
-    # القسم 5: معلومات إضافية
     st.markdown("---")
     
     col1, col2 = st.columns(2)
@@ -819,13 +774,10 @@ with tab2:
             لتدريب النموذج:
             ```bash
             python train_hybrid_model.py""")   
-# في الجزء الذي يعرض تاريخ التقييمات (حوالي السطر 826)
-# ✅ التصحيح: التحقق من وجود المتغير
     if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
         st.markdown("---")
         st.markdown("### 📋 تاريخ التقييمات")
         
-        # عرض آخر 3 تقييمات مع التحقق من أن القائمة ليست فارغة
         eval_history = st.session_state.evaluation_results[-3:] if len(st.session_state.evaluation_results) >= 3 else st.session_state.evaluation_results
         
         for i, eval_item in enumerate(eval_history):
@@ -837,10 +789,8 @@ with tab2:
                 else:
                     st.info("لا توجد نتائج تقييم متاحة")
     else:
-        # إذا لم يكن هناك تقييمات سابقة، يمكن عرض رسالة
-        pass  # أو st.info("لا توجد تقييمات سابقة")=========================================================
-# تبويب 3: عن المشروع
-# ============================================================
+        pass 
+
 with tab3:
     st.subheader("ℹ️ عن المشروع")
     
@@ -920,25 +870,21 @@ with tab3:
             st.metric("📦 حجم", "~150 MB" if hybrid_available else "~90 MB")
             st.metric("🔧 Status", "متطور")
 
-# ============================================================
-# سجل التاريخ (في الشريط الجانبي)
-# ============================================================
 with st.sidebar:
     st.divider()
     st.subheader("📜 سجل الملخصات")
     
     if 'history' in st.session_state and st.session_state.history:
-        for i, item in enumerate(st.session_state.history[-3:]):  # آخر 3 ملخصات
+        for i, item in enumerate(st.session_state.history[-3:]):  
             with st.expander(f"ملخص {i+1}: {item['model']}"):
                 st.caption(f"النص: {item['text']}")
                 st.write(f"**الملخص:** {item['summary']}")
     
-    # سجل التقييمات
     if 'evaluation_results' in st.session_state and st.session_state.evaluation_results:
         st.divider()
         st.subheader("📊 سجل التقييمات")
         
-        for i, eval_item in enumerate(st.session_state.evaluation_results[-2:]):  # آخر تقييمان
+        for i, eval_item in enumerate(st.session_state.evaluation_results[-2:]):  
             with st.expander(f"تقييم {i+1}"):
                 st.caption(f"النص: {eval_item['text']}")
                 for result in eval_item['results']:
@@ -948,7 +894,6 @@ with st.sidebar:
     else:
         st.caption("لا توجد ملخصات سابقة")
 
-# تذييل الصفحة
 st.markdown("""
 <div class="footer">
     <p>🚀 تم تطويره باستخدام Streamlit | 📝 ملخص النصوص الذكي v2.0.0 (PyTorch)</p>

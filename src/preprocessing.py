@@ -1,4 +1,3 @@
-# src/preprocessing.py
 import re
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -7,7 +6,6 @@ import config
 from tqdm import tqdm
 import gc
 
-# تجميع الأنماط لتحسين الأداء
 HTML_PARSER = 'lxml'
 URL_PATTERN = re.compile(r'https?://\S+|www\.\S+|ftp://\S+', re.IGNORECASE)
 EDITOR_NOTE_PATTERN = re.compile(r"Editor's note:.*?(?=\.\s|$)", re.IGNORECASE)
@@ -15,19 +13,16 @@ COPYRIGHT_PATTERN = re.compile(r'Copyright\s+\d{4}\s+.*?All rights reserved\.?',
 PROMO_PATTERN = re.compile(r'Read more\.?|Click here\.?|Watch now\.?', re.IGNORECASE)
 
 def clean_text(text: str, is_summary: bool = False) -> str:
-    """تنظيف شامل للنص (مقال أو ملخص)."""
+
     if pd.isna(text):
         return ""
     text = str(text)
 
-    # إزالة HTML
     soup = BeautifulSoup(text, HTML_PARSER)
     text = soup.get_text(separator=" ")
 
-    # إزالة الروابط
     text = URL_PATTERN.sub(' ', text)
 
-    # تنظيف خاص بالمقالات
     if not is_summary:
         text = remove_news_prefix(text)
         text = EDITOR_NOTE_PATTERN.sub(' ', text)
@@ -35,32 +30,27 @@ def clean_text(text: str, is_summary: bool = False) -> str:
     text = COPYRIGHT_PATTERN.sub(' ', text)
     text = PROMO_PATTERN.sub(' ', text)
 
-    # إصلاح مسافات بعد علامات الترقيم
     text = re.sub(r'([.!?])([A-Z])', r'\1 \2', text)
 
-    # توحيد المسافات
     text = normalize_whitespace(text)
     return text
 
 def load_and_clean_data(input_path: str = None) -> pd.DataFrame:
-    """تحميل البيانات من CSV وتنظيفها مع معالجة البيانات الكبيرة بكفاءة."""
+
     input_path = input_path or config.RAW_DATA_PATH
     print(f"جاري تحميل البيانات من {input_path}...")
     df = pd.read_csv(input_path)
     print(f"تم تحميل {len(df):,} صف")
 
-    # التحقق من الأعمدة
     required_cols = ['article', 'highlights']
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Column '{col}' not found in the dataset.")
 
-    # نسخ الأعمدة المطلوبة
     df_clean = df[required_cols].copy()
-    del df  # تحرير الذاكرة
+    del df 
     gc.collect()
 
-    # تنظيف النصوص مع شريط التقدم
     print("جاري تنظيف النصوص...")
     tqdm.pandas(desc="تنظيف المقالات")
     df_clean['article'] = df_clean['article'].progress_apply(lambda x: clean_text(x, is_summary=False))
@@ -68,12 +58,10 @@ def load_and_clean_data(input_path: str = None) -> pd.DataFrame:
     tqdm.pandas(desc="تنظيف الملخصات")
     df_clean['highlights'] = df_clean['highlights'].progress_apply(lambda x: clean_text(x, is_summary=True))
 
-    # إزالة الصفوف الفارغة بعد التنظيف
     print("إزالة الصفوف الفارغة...")
     df_clean = df_clean[(df_clean['article'].str.strip() != '') & (df_clean['highlights'].str.strip() != '')]
     print(f"بقي {len(df_clean):,} صف بعد إزالة الصفوف الفارغة")
 
-    # فلترة حسب عدد الكلمات
     print("فلترة البيانات حسب عدد الكلمات...")
     df_clean['article_word_count'] = df_clean['article'].apply(lambda x: len(str(x).split()))
     df_clean['summary_word_count'] = df_clean['highlights'].apply(lambda x: len(str(x).split()))
@@ -89,13 +77,11 @@ def load_and_clean_data(input_path: str = None) -> pd.DataFrame:
     filtered_count = len(df_clean)
     print(f"تم حذف {initial_count - filtered_count:,} صف بسبب حدود الكلمات")
 
-    # إزالة التكرارات
     print("إزالة التكرارات...")
     initial_count = len(df_clean)
     df_clean = df_clean.drop_duplicates(subset=['article']).reset_index(drop=True)
     print(f"تم حذف {initial_count - len(df_clean):,} صف مكرر")
 
-    # حذف أعمدة العد المؤقتة
     df_clean = df_clean.drop(columns=['article_word_count', 'summary_word_count'])
     gc.collect()
     

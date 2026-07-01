@@ -1,18 +1,3 @@
-# train_hybrid_model.py
-"""
-Training script for the Hybrid Deep Learning Summarization Model.
-
-This script:
-1. Loads cleaned training data
-2. Creates HybridDeepSummarizer instance
-3. Creates training dataset with weak supervision (ROUGE-based labels)
-4. Trains the neural network model (PyTorch)
-5. Saves the trained model to disk
-
-Usage:
-    python train_hybrid_model.py [--sample_size 1000] [--epochs 20] [--batch_size 64]
-"""
-
 import argparse
 import pandas as pd
 import numpy as np
@@ -41,7 +26,6 @@ def main():
     print("HYBRID DEEP LEARNING SUMMARIZATION MODEL - TRAINING (PyTorch)")
     print("=" * 70)
     
-    # Step 1: Load cleaned data
     print("\n[Step 1/5] Loading and cleaning training data...")
     try:
         if os.path.exists(config.CLEANED_DATA_PATH):
@@ -67,7 +51,6 @@ def main():
         print("✗ Dataset must have 'article' and 'highlights' columns")
         sys.exit(1)
     
-    # Step 2: Initialize summarizer
     print("\n[Step 2/5] Initializing HybridDeepSummarizer...")
     try:
         summarizer = HybridDeepSummarizer()
@@ -77,7 +60,6 @@ def main():
         print(f"✗ Error initializing summarizer: {str(e)}")
         sys.exit(1)
     
-    # Step 3: Create training data
     print("\n[Step 3/5] Creating training dataset with weak supervision...")
     print(f"  Using ROUGE-1 score > 0.3 as positive label")
     try:
@@ -102,7 +84,6 @@ def main():
         traceback.print_exc()
         sys.exit(1)
     
-    # Step 4: Train model
     print("\n[Step 4/5] Training neural network model...")
     print(f"  Epochs: {args.epochs}")
     print(f"  Batch size: {args.batch_size}")
@@ -116,12 +97,10 @@ def main():
             batch_size=args.batch_size,
             verbose=1
         )
-        # عرض النتائج النهائية
         print("\n" + "=" * 70)
         print("TRAINING COMPLETED")
         print("=" * 70)
         
-        # نتائج التدريب
         if 'accuracy' in history and history['accuracy']:
             print(f"\nTraining Results (Last Epoch):")
             print(f"  Accuracy  : {history['accuracy'][-1]:.4f}")
@@ -130,7 +109,6 @@ def main():
             print(f"  F1-Score  : {history['f1_score'][-1]:.4f}")
             print(f"  Loss      : {history['loss'][-1]:.4f}")
         
-        # نتائج التحقق
         if 'val_accuracy' in history and history['val_accuracy']:
             print(f"\nValidation Results (Last Epoch):")
             print(f"  Accuracy  : {history['val_accuracy'][-1]:.4f}")
@@ -139,7 +117,6 @@ def main():
             print(f"  F1-Score  : {history['val_f1_score'][-1]:.4f}")
             print(f"  Loss      : {history['val_loss'][-1]:.4f}")
         
-        # نتائج الاختبار
         if 'test_accuracy' in history:
             print(f"\nTest Results:")
             print(f"  Accuracy  : {history['test_accuracy']:.4f}")
@@ -156,7 +133,6 @@ def main():
         traceback.print_exc()
         sys.exit(1)
     
-    # Step 5: Save model
     print("\n[Step 5/5] Saving trained model...")
     try:
         summarizer.save_model(config.HYBRID_MODEL_PATH)

@@ -1,14 +1,3 @@
-# src/hybrid_deep_model.py
-"""
-PyTorch implementation of the Hybrid Extractive Summarizer.
-
-Provides:
-- Feature extraction (TF-IDF, TextRank, position, length, BM25, centrality, entropy, NER, POS, embedding)
-- Dataset and DataLoader usage
-- Training/validation loops with metrics and early stopping
-- Model save/load (models/hybrid_model.pt) and scaler saved separately
-"""
-
 import os
 import json
 import gc
@@ -45,20 +34,9 @@ from src.utils import split_sentences, normalize_whitespace
 import config
 
 
-# -----------------------------
 # Focal Loss
-# -----------------------------
 class FocalLoss(nn.Module):
-    """
-    Focal Loss for imbalanced classification.
-    
-    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
-    
-    Args:
-        alpha: وزن الفئة الإيجابية
-        gamma: معامل التركيز (كلما زاد، زاد التركيز على العينات الصعبة)
-        reduction: طريقة التجميع ('mean' أو 'sum')
-    """
+
     def __init__(self, alpha: float = 0.75, gamma: float = 2.0, reduction: str = 'mean'):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
@@ -66,19 +44,15 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # تحويل inputs إلى احتمالات باستخدام sigmoid
+
         probs = torch.sigmoid(inputs)
         
-        # حساب p_t
         p_t = probs * targets + (1 - probs) * (1 - targets)
         
-        # حساب عامل التركيز
         focal_weight = (1 - p_t) ** self.gamma
         
-        # حساب alpha
         alpha_weight = self.alpha * targets + (1 - self.alpha) * (1 - targets)
         
-        # حساب الخسارة
         loss = -alpha_weight * focal_weight * torch.log(p_t + 1e-8)
         
         if self.reduction == 'mean':
@@ -89,9 +63,7 @@ class FocalLoss(nn.Module):
             return loss
 
 
-# -----------------------------
 # Model and Dataset
-# -----------------------------
 
 class HybridDataset(Dataset):
     def __init__(self, X: np.ndarray, y: np.ndarray):
@@ -108,33 +80,28 @@ class HybridDataset(Dataset):
 class HybridNet(nn.Module):
     def __init__(self, input_dim: int):
         super().__init__()
-        # شبكة أعمق مع Batch Normalization
         self.net = nn.Sequential(
-            # طبقة 1: input_dim -> 256
+
             nn.Linear(input_dim, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.3),
             
-            # طبقة 2: 256 -> 128
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.Dropout(0.25),
             
-            # طبقة 3: 128 -> 64
             nn.Linear(128, 64),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Dropout(0.2),
             
-            # طبقة 4: 64 -> 32
             nn.Linear(64, 32),
             nn.BatchNorm1d(32),
             nn.ReLU(),
             nn.Dropout(0.15),
             
-            # طبقة الإخراج: 32 -> 1 (Logits)
             nn.Linear(32, 1)
         )
 
@@ -143,7 +110,6 @@ class HybridNet(nn.Module):
 
 
 class HybridDeepSummarizer:
-    """Hybrid summarizer with PyTorch training backend and rich features."""
 
     def __init__(self, embedding_model: str = config.EMBEDDING_MODEL):
         self.embedding_model = embedding_model
@@ -155,7 +121,6 @@ class HybridDeepSummarizer:
         self.input_dim = None
         self.best_threshold = 0.25
         
-        # محاولة تحميل NLTK stopwords
         try:
             import nltk
             nltk.download('stopwords', quiet=True)
@@ -166,7 +131,6 @@ class HybridDeepSummarizer:
                               'by', 'in', 'as', 'is', 'was', 'were', 'are', 'be', 'been',
                               'that', 'this', 'these', 'those', 'it', 'he', 'she', 'they'}
         
-        # محاولة تحميل spacy
         self.nlp = None
         try:
             import spacy
@@ -174,11 +138,9 @@ class HybridDeepSummarizer:
         except:
             print("⚠️ spacy not available. NER and POS features will use fallback.")
 
-    # -----------------------------
     # Feature extraction
-    # -----------------------------
+
     def extract_sentence_features(self, text: str) -> Tuple[List[str], np.ndarray]:
-        """استخراج ميزات الجمل من النص الكامل."""
         text = normalize_whitespace(text)
         if not text:
             return [], np.array([])
@@ -189,7 +151,6 @@ class HybridDeepSummarizer:
         return sentences, features
 
     def _compute_features(self, text: str, sentences: List[str]) -> np.ndarray:
-        """حساب الميزات للجمل باستخدام النص الكامل."""
         num_sentences = len(sentences)
         
         # 1. TF-IDF scores
@@ -233,27 +194,26 @@ class HybridDeepSummarizer:
         # 13. Embedding features
         embedding_features = self._compute_embedding_features(sentences)
 
-        # تجميع جميع الميزات (13 ميزة)
         feats = np.vstack([
-            tfidf_scores,           # 1
-            textrank_scores,        # 2
-            positions,              # 3
-            normalized_lengths,     # 4
-            bm25_scores,           # 5
-            centrality_scores,     # 6
-            entropy_scores,        # 7
-            ner_scores,            # 8
-            pos_features,          # 9
-            position_binary,       # 10
-            stopword_ratio,        # 11
-            unique_ratio,          # 12
-            embedding_features     # 13
+            tfidf_scores,           
+            textrank_scores,        
+            positions,              
+            normalized_lengths,    
+            bm25_scores,            
+            centrality_scores,     
+            entropy_scores,        
+            ner_scores,            
+            pos_features,          
+            position_binary,       
+            stopword_ratio,        
+            unique_ratio,          
+            embedding_features     
         ]).T.astype(np.float32)
         
         return feats
 
     def _compute_tfidf_scores(self, text: str, sentences: List[str]) -> np.ndarray:
-        """حساب درجات TF-IDF للجمل."""
+
         try:
             tfidf_matrix = self.tfidf_vectorizer.fit_transform([text])
             sentence_vectors = self.tfidf_vectorizer.transform(sentences)
@@ -269,7 +229,7 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_textrank_scores(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجات TextRank باستخدام sentence embeddings."""
+
         try:
             embeddings = self.encoder.encode(sentences, batch_size=32, show_progress_bar=False)
             sim_matrix = cosine_similarity(embeddings)
@@ -285,7 +245,7 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_bm25_scores(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجات BM25 للجمل."""
+
         try:
             from rank_bm25 import BM25Okapi
             import string
@@ -310,7 +270,7 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_centrality_scores(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجة مركزية الجملة."""
+
         try:
             embeddings = self.encoder.encode(sentences, batch_size=32, show_progress_bar=False)
             sim_matrix = cosine_similarity(embeddings)
@@ -323,7 +283,7 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_entropy_scores(self, sentences: List[str]) -> np.ndarray:
-        """حساب إنتروبيا الجملة."""
+
         from collections import Counter
         import math
         
@@ -352,7 +312,7 @@ class HybridDeepSummarizer:
         return scores
 
     def _compute_ner_scores(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجات الكيانات المسماة."""
+
         scores = []
         if self.nlp is None:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
@@ -373,7 +333,7 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_pos_features(self, sentences: List[str]) -> np.ndarray:
-        """حساب ميزات أجزاء الكلام."""
+
         scores = []
         if self.nlp is None:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
@@ -397,13 +357,13 @@ class HybridDeepSummarizer:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
     def _compute_position_binary(self, num_sentences: int) -> np.ndarray:
-        """ميزات موضع الجملة بشكل ثنائي."""
+
         if num_sentences <= 1:
             return np.array([0.5] * num_sentences, dtype=float)
         
         positions = np.zeros(num_sentences, dtype=float)
-        positions[0] = 1.0  # الجملة الأولى
-        positions[-1] = 1.0  # الجملة الأخيرة
+        positions[0] = 1.0  
+        positions[-1] = 1.0  
         
         first_third = max(num_sentences // 3, 1)
         last_third = max(2 * num_sentences // 3, 1)
@@ -416,7 +376,7 @@ class HybridDeepSummarizer:
         return positions
 
     def _compute_stopword_ratio(self, sentences: List[str]) -> np.ndarray:
-        """حساب نسبة كلمات التوقف في الجملة."""
+
         scores = []
         for sentence in sentences:
             words = sentence.lower().split()
@@ -433,7 +393,7 @@ class HybridDeepSummarizer:
         return scores
 
     def _compute_unique_ratio(self, sentences: List[str]) -> np.ndarray:
-        """حساب نسبة الكلمات الفريدة في الجملة."""
+
         scores = []
         for sentence in sentences:
             words = sentence.lower().split()
@@ -450,7 +410,7 @@ class HybridDeepSummarizer:
         return scores
 
     def _compute_embedding_features(self, sentences: List[str]) -> np.ndarray:
-        """حساب ميزات التضمين للجمل."""
+
         try:
             embeddings = self.encoder.encode(sentences, batch_size=32, show_progress_bar=False)
             
@@ -465,13 +425,11 @@ class HybridDeepSummarizer:
             
             features = np.array(features, dtype=float)
             
-            # تطبيع كل عمود
             for i in range(features.shape[1]):
                 col = features[:, i]
                 if col.max() > col.min():
                     features[:, i] = (col - col.min()) / (col.max() - col.min())
             
-            # متوسط الميزات الخمس
             scores = np.mean(features, axis=1)
             
             if scores.max() > 0:
@@ -481,21 +439,12 @@ class HybridDeepSummarizer:
         except Exception:
             return np.ones(len(sentences), dtype=float) / max(len(sentences), 1)
 
-    # -----------------------------
     # Training data creation with composite score
-    # -----------------------------
+    
     def create_training_data(self, df: pd.DataFrame, text_col: str = 'article', 
                             summary_col: str = 'highlights',
                             sample_size: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        إنشاء بيانات التدريب باستخدام Score مركب بدلاً من ROUGE فقط.
         
-        Score المركب:
-        - 0.45 * ROUGE-1
-        - 0.25 * TextRank
-        - 0.20 * TF-IDF
-        - 0.10 * Position
-        """
         if sample_size:
             df = df.sample(n=min(sample_size, len(df)), random_state=config.HYBRID_RANDOM_STATE)
         
@@ -520,25 +469,20 @@ class HybridDeepSummarizer:
                 if len(sentences) == 0 or features.size == 0:
                     continue
                 
-                # حساب TextRank و TF-IDF و Position من الميزات المستخرجة
-                # الميزات مرتبة كالتالي:
                 # 0: TF-IDF, 1: TextRank, 2: Position, 3: Length, ...
                 tfidf_scores = features[:, 0]
                 textrank_scores = features[:, 1]
                 position_scores = features[:, 2]
                 
-                # تطبيع الميزات إلى [0, 1]
                 tfidf_norm = (tfidf_scores - tfidf_scores.min()) / (tfidf_scores.max() - tfidf_scores.min() + 1e-8)
                 textrank_norm = (textrank_scores - textrank_scores.min()) / (textrank_scores.max() - textrank_scores.min() + 1e-8)
                 position_norm = (position_scores - position_scores.min()) / (position_scores.max() - position_scores.min() + 1e-8)
                 
                 labels = []
                 for i, sentence in enumerate(sentences):
-                    # حساب ROUGE
                     scores = scorer.score(summary, sentence)
                     rouge_score = scores['rouge1'].fmeasure
                     
-                    # حساب Score المركب
                     composite_score = (
                         0.45 * rouge_score +
                         0.25 * textrank_norm[i] +
@@ -565,11 +509,10 @@ class HybridDeepSummarizer:
         
         return features_array, labels_array
 
-    # -----------------------------
     # Training
-    # -----------------------------
+
     def find_best_threshold(self, val_loader: DataLoader) -> float:
-        """العثور على أفضل عتبة باستخدام F1 Score."""
+
         self.model.eval()
         val_preds_probs = []
         val_targets = []
@@ -581,7 +524,6 @@ class HybridDeepSummarizer:
                 val_preds_probs.extend(probs.numpy().flatten())
                 val_targets.extend(batch_y.numpy().astype(int).flatten())
         
-        # تجربة عتبات أكثر دقة
         thresholds = np.arange(0.05, 0.95, 0.05)
         best_f1 = 0
         best_threshold = 0.25
@@ -599,7 +541,7 @@ class HybridDeepSummarizer:
     def train(self, X: np.ndarray, y: np.ndarray, epochs: Optional[int] = None, 
               batch_size: Optional[int] = None, validation_split: Optional[float] = None, 
               verbose: int = 1) -> Dict:
-        """تدريب النموذج الهجين مع تحسينات."""
+
         if X.size == 0 or y.size == 0:
             raise ValueError("Training data is empty")
         
@@ -608,7 +550,6 @@ class HybridDeepSummarizer:
         
         self.input_dim = X.shape[1]
 
-        # 1. تقسيم البيانات
         X_train, X_temp, y_train, y_temp = train_test_split(
             X, y, test_size=0.30, random_state=config.HYBRID_RANDOM_STATE, stratify=y
         )
@@ -626,12 +567,10 @@ class HybridDeepSummarizer:
         print(f"Features   : {self.input_dim}")
         print("=" * 60)
 
-        # 2. تطبيع البيانات
         X_train_scaled = self.feature_scaler.fit_transform(X_train)
         X_val_scaled = self.feature_scaler.transform(X_val)
         X_test_scaled = self.feature_scaler.transform(X_test)
 
-        # 3. SMOTE لموازنة البيانات
         try:
             from imblearn.over_sampling import SMOTE
             smote = SMOTE(random_state=config.HYBRID_RANDOM_STATE, k_neighbors=3)
@@ -641,14 +580,12 @@ class HybridDeepSummarizer:
             print("⚠️ SMOTE not available, using original data")
             X_train_resampled, y_train_resampled = X_train_scaled, y_train
 
-        # 4. حساب وزن الفئة لـ Focal Loss
         num_neg = np.sum(y_train_resampled == 0)
         num_pos = np.sum(y_train_resampled == 1)
         pos_ratio = num_pos / (num_pos + num_neg)
-        alpha = 1 - pos_ratio  # alpha للفئة الإيجابية
+        alpha = 1 - pos_ratio  
         print(f"✓ Alpha for Focal Loss: {alpha:.4f}")
 
-        # 5. إنشاء DataLoaders
         train_ds = HybridDataset(X_train_resampled, y_train_resampled)
         val_ds = HybridDataset(X_val_scaled, y_val)
         test_ds = HybridDataset(X_test_scaled, y_test)
@@ -657,14 +594,11 @@ class HybridDeepSummarizer:
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
         test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
-        # 6. تهيئة النموذج
         self.model = HybridNet(input_dim=self.input_dim)
         
-        # 7. ✅ استخدام Focal Loss بدلاً من BCEWithLogitsLoss
         criterion = FocalLoss(alpha=alpha, gamma=2.0, reduction='mean')
         optimizer = optim.Adam(self.model.parameters(), lr=config.LEARNING_RATE, weight_decay=1e-4)
 
-        # ✅ Scheduler مع patience=2
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.5, patience=2
         )
@@ -678,7 +612,7 @@ class HybridDeepSummarizer:
         }
         
         best_val_loss = float('inf')
-        patience = 8  # ✅ زيادة Early Stopping Patience إلى 8
+        patience = 8  
         patience_counter = 0
 
         print("\n" + "=" * 60)
@@ -686,7 +620,7 @@ class HybridDeepSummarizer:
         print("=" * 60)
 
         for epoch in range(epochs):
-            # --- Training Phase ---
+
             self.model.train()
             train_loss = 0.0
             train_preds, train_targets = [], []
@@ -697,7 +631,6 @@ class HybridDeepSummarizer:
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 
-                # Gradient clipping لمنع انفجار التدرجات
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 
                 optimizer.step()
@@ -712,7 +645,6 @@ class HybridDeepSummarizer:
             train_rec = recall_score(train_targets, train_preds, zero_division=0)
             train_f1 = f1_score(train_targets, train_preds, zero_division=0)
 
-            # --- Validation Phase ---
             self.model.eval()
             val_loss = 0.0
             val_preds, val_targets = [], []
@@ -731,7 +663,6 @@ class HybridDeepSummarizer:
             val_rec = recall_score(val_targets, val_preds, zero_division=0)
             val_f1 = f1_score(val_targets, val_preds, zero_division=0)
 
-            # --- Save History ---
             history["loss"].append(train_loss)
             history["val_loss"].append(val_loss)
             history["accuracy"].append(train_acc)
@@ -743,10 +674,8 @@ class HybridDeepSummarizer:
             history["f1_score"].append(train_f1)
             history["val_f1_score"].append(val_f1)
 
-            # --- Update Learning Rate ---
             scheduler.step(val_loss)
 
-            # --- Print Progress ---
             if verbose:
                 print(f"Epoch {epoch+1}/{epochs} - "
                       f"loss: {train_loss:.4f} - acc: {train_acc:.4f} - f1: {train_f1:.4f} | "
@@ -763,17 +692,14 @@ class HybridDeepSummarizer:
                     print(f"Early stopping triggered at epoch {epoch+1}")
                     break
 
-        # 8. استعادة أفضل نموذج
         if os.path.exists(config.HYBRID_MODEL_PATH + ".tmp"):
             self.model.load_state_dict(torch.load(config.HYBRID_MODEL_PATH + ".tmp"))
             os.remove(config.HYBRID_MODEL_PATH + ".tmp")
 
         self.is_trained = True
 
-        # 9. العثور على أفضل عتبة
         self.best_threshold = self.find_best_threshold(val_loader)
 
-        # 10. تقييم على مجموعة الاختبار
         print("\n" + "=" * 60)
         print("Final Evaluation on Test Set")
         print("=" * 60)
@@ -788,7 +714,6 @@ class HybridDeepSummarizer:
                 loss = criterion(outputs, batch_y)
                 test_loss += loss.item() * batch_X.size(0)
                 
-                # استخدام أفضل عتبة
                 probs = torch.sigmoid(outputs)
                 preds = (probs >= self.best_threshold).int()
                 
@@ -816,16 +741,13 @@ class HybridDeepSummarizer:
         print(f"Best Threshold : {self.best_threshold:.3f}")
         print("=" * 60)
 
-        # 11. حفظ النتائج
         self._save_all_results(history, test_targets, test_preds)
 
         return history
 
-    # -----------------------------
     # Save Results
-    # -----------------------------
+
     def _save_all_results(self, history: Dict, y_true: List[int], y_pred: List[int]):
-        """حفظ جميع النتائج والمخططات."""
         os.makedirs(config.RESULTS_DIR, exist_ok=True)
         os.makedirs(config.PLOTS_DIR, exist_ok=True)
 
@@ -852,7 +774,7 @@ class HybridDeepSummarizer:
         print("✓ All results saved successfully!")
 
     def _save_individual_plots(self, history: Dict):
-        """حفظ المخططات الفردية للتدريب."""
+
         plots = [
             ("loss", "val_loss", "Loss", "Loss", config.LOSS_CURVE),
             ("accuracy", "val_accuracy", "Accuracy", "Accuracy", config.ACCURACY_CURVE),
@@ -878,7 +800,7 @@ class HybridDeepSummarizer:
         print("✓ Individual plots saved.")
 
     def _save_confusion_matrix(self, y_true: List[int], y_pred: List[int]):
-        """حفظ مصفوفة الارتباك."""
+
         cm = confusion_matrix(y_true, y_pred)
         
         fig, ax = plt.subplots(figsize=(7, 6))
@@ -907,7 +829,7 @@ class HybridDeepSummarizer:
         print("✓ Confusion matrix saved.")
 
     def _save_metrics_json(self, history: Dict):
-        """حفظ المقاييس كـ JSON."""
+
         metrics = {
             "training": {
                 "loss": float(history["loss"][-1]),
@@ -938,11 +860,10 @@ class HybridDeepSummarizer:
 
         print(f"✓ Metrics JSON saved to {config.METRICS_JSON}")
 
-    # -----------------------------
     # Summarization (Inference)
-    # -----------------------------
+
     def summarize(self, text: str, num_sentences: int = None) -> str:
-        """توليد ملخص باستخدام النموذج المدرب."""
+
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model not trained. Please train or load a trained model.")
         
@@ -971,11 +892,10 @@ class HybridDeepSummarizer:
         top_indices.sort()
         return " ".join([sentences[i] for i in top_indices])
 
-    # -----------------------------
     # Save / Load
-    # -----------------------------
+    
     def save_model(self, path: str = None) -> None:
-        """حفظ النموذج والـ Scaler."""
+
         if not self.is_trained or self.model is None:
             raise RuntimeError("Cannot save untrained model")
         
@@ -1003,7 +923,7 @@ class HybridDeepSummarizer:
 
     @classmethod
     def load_model(cls, path: str = None) -> 'HybridDeepSummarizer':
-        """تحميل النموذج من القرص."""
+
         path = path or config.HYBRID_MODEL_PATH
         if not os.path.exists(path):
             raise FileNotFoundError(f"Model file not found at {path}")
@@ -1052,7 +972,7 @@ class HybridDeepSummarizer:
 def batch_summarize_hybrid(df: pd.DataFrame, text_column: str, 
                            summarizer: HybridDeepSummarizer,
                            num_sentences: int = None) -> pd.Series:
-    """تطبيق التلخيص الهجين على عمود كامل."""
+
     def safe_summarize(text):
         try:
             return summarizer.summarize(text, num_sentences)

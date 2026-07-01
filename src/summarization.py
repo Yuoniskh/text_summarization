@@ -10,13 +10,9 @@ from src.utils import split_sentences
 import config
 
 class ExtractiveSummarizer:
-    """
-    ملخص استخراجي باستخدام TF-IDF أو TextRank (مع sentence embeddings).
-    """
+    
     def __init__(self, method: str = 'textrank'):
-        """
-        method: 'tfidf' أو 'textrank'
-        """
+        
         self.method = method.lower()
         if self.method == 'textrank':
             self.encoder = SentenceTransformer(config.EMBEDDING_MODEL)
@@ -26,7 +22,7 @@ class ExtractiveSummarizer:
             raise ValueError("Method must be 'tfidf' or 'textrank'.")
 
     def summarize(self, text: str, num_sentences: int = None) -> str:
-        """توليد ملخص من النص المعطى."""
+
         num_sentences = num_sentences or config.DEFAULT_SUMMARY_SENTENCES
         sentences = split_sentences(text)
 
@@ -35,39 +31,34 @@ class ExtractiveSummarizer:
         if len(sentences) <= num_sentences:
             return " ".join(sentences)
 
-        # حساب درجات الجمل
         if self.method == 'tfidf':
             scores = self._score_tfidf(sentences)
-        else:  # textrank
+        else:  
             scores = self._score_textrank(sentences)
 
-        # اختيار أفضل الجمل مع الحفاظ على الترتيب الأصلي
         top_indices = np.argsort(scores)[-num_sentences:]
         top_indices.sort()
         summary = " ".join([sentences[i] for i in top_indices])
         return summary
 
     def _score_tfidf(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجات TF-IDF للجمل."""
+
         tfidf_matrix = self.vectorizer.fit_transform(sentences)
         scores = np.asarray(tfidf_matrix.sum(axis=1)).flatten()
-        # تطبيع اختياري (تقسيم على طول الجملة لتجنب تفضيل الجمل الطويلة جداً)
         lengths = np.array([len(s.split()) for s in sentences])
-        scores = scores / (lengths + 1)  # منع القسمة على صفر
+        scores = scores / (lengths + 1)  
         return scores
 
     def _score_textrank(self, sentences: List[str]) -> np.ndarray:
-        """حساب درجات TextRank باستخدام sentence embeddings."""
+
         embeddings = self.encoder.encode(sentences)
         sim_matrix = cosine_similarity(embeddings)
-        np.fill_diagonal(sim_matrix, 0)  # لا تربط الجملة بنفسها
+        np.fill_diagonal(sim_matrix, 0)  
 
         nx_graph = nx.from_numpy_array(sim_matrix)
         try:
-            # المحاولة العادية مع وسيط tol مرن لمنع التشنج الحسابي
             scores_dict = nx.pagerank(nx_graph, max_iter=500, tol=1e-3)
         except nx.PowerIterationFailedConvergence:
-            # الحل البديل: إذا فشلت الخوارزمية، نوزع الأوزان بالتساوي على الجمل لكي لا يتوقف الكود
             print("\n⚠️ Warning: TextRank failed to converge on a complex text. Applying fallback uniform weights.")
             scores_dict = {node: 1.0 / len(nx_graph) for node in nx_graph.nodes()}
         scores = np.array([scores_dict[i] for i in range(len(sentences))])
@@ -75,5 +66,5 @@ class ExtractiveSummarizer:
 
 def batch_summarize(df: pd.DataFrame, text_column: str, summarizer: ExtractiveSummarizer,
                     num_sentences: int = None) -> pd.Series:
-    """تطبيق التلخيص على عمود كامل في DataFrame."""
+
     return df[text_column].apply(lambda x: summarizer.summarize(x, num_sentences))

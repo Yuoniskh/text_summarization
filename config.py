@@ -1,9 +1,7 @@
-# config.py
 import os
 
-# ==========================================
 # Base Paths
-# ==========================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -14,32 +12,28 @@ PLOTS_DIR = os.path.join(RESULTS_DIR, "plots")
 RAW_DATA_PATH = os.path.join(DATA_DIR, "my_training_data.csv")
 CLEANED_DATA_PATH = os.path.join(DATA_DIR, "cleaned_training_data.csv")
 
-# Create directories automatically
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
-# ==========================================
 # Data Cleaning
-# ==========================================
+
 MIN_ARTICLE_WORDS = 30
 MIN_SUMMARY_WORDS = 3
 MAX_ARTICLE_WORDS = 2000
 
-# ==========================================
 # Summarization
-# ==========================================
+
 DEFAULT_SUMMARY_SENTENCES = 3
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-# ==========================================
 # Hybrid Deep Learning (PyTorch)
-# ==========================================
+
 HYBRID_MODEL_PATH = os.path.join(
     MODELS_DIR,
-    "hybrid_model.pt"  # تغيير من .keras إلى .pt
+    "hybrid_model.pt" 
 )
 
 HYBRID_EPOCHS = 25
@@ -58,9 +52,8 @@ HYBRID_CHUNK_SIZE = 5000
 LEARNING_RATE = 1e-3
 EARLY_STOPPING_PATIENCE = 8
 
-# ==========================================
 # Evaluation
-# ==========================================
+
 ROUGE_METRICS = [
     "rouge1",
     "rouge2",
@@ -69,11 +62,10 @@ ROUGE_METRICS = [
 
 EVAL_SAMPLE_SIZE = 1000
 
-# ==========================================
 # Saved Files
-# ==========================================
-NUM_FEATURES = 13  # عدد الميزات المستخدمة
-USE_SMOTE = True   # استخدام SMOTE لموازنة البيانات
+
+NUM_FEATURES = 13  
+USE_SMOTE = True   
 TRAINING_HISTORY_CSV = os.path.join(
     RESULTS_DIR,
     "training_history.csv"

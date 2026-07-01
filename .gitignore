@@ -9,8 +9,5 @@ data/cleaned_data.csv
 data/my_training_data.csv
 *.csv
 
-models/hybrid_model.pt
-*.pt
-
 .ipynb_checkpoints/
 .DS_Store
