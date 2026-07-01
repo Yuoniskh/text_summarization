@@ -12,8 +12,18 @@ from src.utils import split_sentences
 import config
 import json
 
-from rouge_score import rouge_scorer
+from rouge_score import rouge_scorer.
+import nltk
 
+@st.cache_resource
+def setup_nltk():
+    nltk.download('punkt')
+    nltk.download('punkt_tab')
+    nltk.download('stopwords')
+    nltk.download('averaged_perceptron_tagger')
+
+# استدعاء الدالة
+setup_nltk()
 st.set_page_config(
     page_title="📝 ملخص النصوص الذكي",
     page_icon="📚",
